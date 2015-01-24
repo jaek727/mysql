@@ -1,0 +1,129 @@
+#!/bin/sh
+
+#=======================================================================================
+#
+# This script will dump mysql database tables into individual .sql files.
+#
+# This filesystem is mounted with noexec option so you must use following format to
+# execute the script:
+#
+#       $ sh dumptables ...
+#
+#=======================================================================================
+
+
+
+usage()
+{
+	echo "Usage: $0 -h host -P port -d db_name -u db_user -p db_password [-t table] -f output_folder"
+	echo ""
+        exit
+}
+
+# == Start of main part ==================================================================
+
+unset $dbuser
+unset $host
+unset $port
+unset $dbuser
+unset $dbpass
+unset $dbname
+
+while getopts "h:P:u:p:d:f:t:" option; do
+  case "$option" in
+    (h)
+	#echo "host : $OPTARG"
+        host=$OPTARG
+        ;;
+    (P)
+	#echo "port : $OPTARG"
+        port=$OPTARG
+        ;;
+    (u)
+	#echo "user : $OPTARG"
+        dbuser=$OPTARG
+        ;;
+    (p)
+	#echo "pass : $OPTARG"
+        dbpass=$OPTARG
+        ;;
+    (d)
+	#echo "dbname : $OPTARG"
+        dbname=$OPTARG
+        ;;
+    (f)
+	#echo "folder : $OPTARG"
+        folder=$OPTARG
+        ;;
+    (t)
+	#echo "table : $OPTARG"
+        table=$OPTARG
+        ;;
+    (*) echo "not valid option: $OPTARG"
+	usage
+        exit 1
+        ;;
+  esac
+done
+shift $((OPTIND-1))
+
+if [ -z "$host" ] || [ -z "$port" ] || [ -z "$dbuser" ] || [ -z "$dbpass" ] || [ -z "$dbname" ]
+then
+     usage
+     exit
+fi
+
+echo ""
+echo ""
+
+if [ "$table" != "" ] # then specific table(s) are requested for dump
+then
+     	echo "Dumping $table to $folder/$table.sql"
+	mysqldump --host=$host --port=$port  --user=$dbuser --port=$port -p$dbpass $dbname $table > $folder/$table.sql 2> /dev/null
+        echo "Done."
+else
+
+	rm -fr $folder/stop
+	if [ -d "$folder" ]; then
+	   echo "Folder $folder already exists.  Please choose another folder."
+	   echo ""
+	   echo ""
+	   exit
+	else
+	   echo "Folder $folder does not exist.  Creating $folder."
+	   mkdir -p $folder
+	fi
+
+        echo "You didn't provide table name.  Dumping all tables now."
+
+	#== Get count of tables =================================================================="
+	count="$(mysql --host=$host --port=$port  --user=$dbuser --port=$port -p$dbpass -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$dbname';" -s --skip-column-names 2>  /dev/null)"
+
+	#== Get list of tables ==================================================================="
+	echo "Table count: $count"
+	table_list="$(mysql --host=$host --port=$port  --user=$dbuser --port=$port -p$dbpass -s --skip-column_names -e "show tables from $dbname;" 2> /dev/null )"
+
+
+	#==== Print out list of tables ==========================================================="
+	#echo "-- Table list Start ----------------------------------------------------------------"
+	##echo $table_list
+	#echo "-- Table list End ------------------------------------------------------------------"
+	#echo ""
+
+	#==== Loop through and dump each file ===================================================="
+	i=1
+	for table in $table_list
+	do
+		if [ -f $folder/stop ]
+		then
+		     echo "Exiting...."
+		     exit
+		fi
+		echo "Dumping table $i of $count : $table into $folder/$table.sql"
+		mysqldump --host=$host --port=$port  --user=$dbuser --port=$port -p$dbpass $dbname $table > $folder/$table.sql 2> /dev/null
+		i=$(( $i + 1 ))
+	done
+        echo "Done."
+fi
+echo ""
+echo ""

@@ -1,0 +1,141 @@
+#!/bin/sh
+
+#=======================================================================================
+#
+# This script will load mysql database tables from individual .sql files.
+#
+# This filesystem is mounted with noexec option so you must use following format to
+# execute the script:
+#
+#       $ sh loadtables ...
+#
+#=======================================================================================
+
+
+
+usage()
+{
+	echo "Usage: $0 -h host -P port -d db_name -u db_user -p db_password [-t table] -f folder"
+	echo ""
+        exit
+}
+
+# == Start of main part ==================================================================
+
+unset $dbuser
+unset $host
+unset $port
+unset $dbuser
+unset $dbpass
+unset $dbname
+unset $table_list
+
+while getopts "h:P:u:p:d:f:t:" option; do
+  case "$option" in
+    (h)
+	#echo "host : $OPTARG"
+        host=$OPTARG
+        ;;
+    (P)
+	#echo "port : $OPTARG"
+        port=$OPTARG
+        ;;
+    (u)
+	#echo "user : $OPTARG"
+        dbuser=$OPTARG
+        ;;
+    (p)
+	#echo "pass : $OPTARG"
+        dbpass=$OPTARG
+        ;;
+    (d)
+	#echo "dbname : $OPTARG"
+        dbname=$OPTARG
+        ;;
+    (t)
+	#echo "table_list : $OPTARG"
+        table_list=$OPTARG
+        ;;
+    (f)
+	#echo "folder : $OPTARG"
+        folder=$OPTARG
+        ;;
+    (*)
+	#echo "not valid option: $OPTARG"
+	usage
+        exit 1
+        ;;
+  esac
+done
+shift $((OPTIND-1))
+
+if [ -z "$host" ] || [ -z "$port" ] || [ -z "$dbuser" ] || [ -z "$dbpass" ] || [ -z "$dbname" ] # || [ -z "$table_list" ]
+then
+     usage
+     exit
+fi
+
+
+if [ "$table_list" != "" ]
+then
+        #echo "I will load $table_list"
+	tmp=`echo "$table_list" | sed 's/,/ /g'`
+	table_list=$tmp
+	#echo "table_list = $table_list"
+
+	#echo "I found $folder/$table.sql"
+	tmp=`echo $table_list | sed 's/,/ /g'`
+	echo "Table list = $tmp"
+
+	i=1
+	for table in $table_list
+	do
+		if [ -f $folder/$table.sql ]
+		then
+			echo "Loading table : $table from $folder/$table.sql"
+			mysql --host=$host --port=$port  --user=$dbuser --port=$port -p$dbpass $dbname < $folder/$table.sql
+			#echo "mysql --host=$host --port=$port  --user=$dbuser --port=$port -p$dbpass $dbname < $folder/$table.sql"
+			i=$(( $i + 1 ))
+		else
+			echo "File not found: $folder/$table.sql"
+		fi
+	done
+	echo "Done."
+else
+        echo "You didn't provide table name.  Loading all tables from folder '$folder'."
+	# == Check number of parameters ==========================================================
+
+
+	# == Check if output folder exists =======================================================
+
+	rm -fr $folder/stop
+	if [ ! -d "$folder" ]; then
+	   echo "Folder $folder does not exist."
+	   exit
+	fi
+
+
+	#== Get list of tables ==================================================================="
+	#table_list="$(mysql --host=$host --port=$port  --user=$dbuser --port=$port -p$dbpass -s --skip-column_names -e "show tables from $dbname;" 2> /dev/null )"
+	table_list=`ls $folder`
+	count=`echo $table_list | wc -w`
+	echo "Table count: $count"
+
+
+	#==== Print out list of tables ==========================================================="
+	echo "-- Table list Start ----------------------------------------------------------------"
+	echo $table_list
+	echo "-- Table list End ------------------------------------------------------------------"
+	echo ""
+
+	#==== Loop through and dump each file ===================================================="
+	i=1
+	for table in $table_list
+	do
+		echo "Loading table $i of $count : $table from $folder/$table"
+		mysql --host=$host --port=$port  --user=$dbuser --port=$port -p$dbpass $dbname < $folder/$table
+		echo "mysql --host=$host --port=$port  --user=$dbuser --port=$port -p$dbpass $dbname < $folder/$table"
+		i=$(( $i + 1 ))
+	done
+	echo "Done."
+fi
